@@ -2,6 +2,8 @@ package com.limelight.binding.input.stream_keyboard;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.res.Configuration;
+import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -12,6 +14,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 
 import com.limelight.R;
 import com.limelight.nvstream.input.KeyboardPacket;
@@ -30,46 +33,21 @@ public class StreamKeyboardOverlay {
         boolean shouldBlockToggle();
     }
 
-    private static final class KeySpec {
-        final String label;
-        final String shiftedLabel;
-        final int keyCode;
-        final float widthWeight;
-        final byte stickyModifierMask;
-        final int stickyModifierKeyCode;
-        final boolean isLetter;
-
-        KeySpec(String label, int keyCode, float widthWeight) {
-            this(label, null, keyCode, widthWeight, (byte) 0, 0, false);
-        }
-
-        KeySpec(String label, String shiftedLabel, int keyCode, float widthWeight, boolean isLetter) {
-            this(label, shiftedLabel, keyCode, widthWeight, (byte) 0, 0, isLetter);
-        }
-
-        KeySpec(String label, int keyCode, float widthWeight, byte stickyModifierMask, int stickyModifierKeyCode) {
-            this(label, null, keyCode, widthWeight, stickyModifierMask, stickyModifierKeyCode, false);
-        }
-
-        KeySpec(String label, String shiftedLabel, int keyCode, float widthWeight,
-                byte stickyModifierMask, int stickyModifierKeyCode, boolean isLetter) {
-            this.label = label;
-            this.shiftedLabel = shiftedLabel;
-            this.keyCode = keyCode;
-            this.widthWeight = widthWeight;
-            this.stickyModifierMask = stickyModifierMask;
-            this.stickyModifierKeyCode = stickyModifierKeyCode;
-            this.isLetter = isLetter;
-        }
+    private enum LayoutMode {
+        SPLIT_SIDE,
+        BOTTOM
     }
 
+    private final FrameLayout parent;
     private final Context context;
     private final StreamKeyboardInput keyboardInput;
     private final GrabInputCallback grabInputCallback;
     private final VisibilityBlocker visibilityBlocker;
 
-    private final View rootView;
-    private final Map<Button, KeySpec> buttonSpecs = new HashMap<>();
+    private View rootView;
+    private FrameLayout.LayoutParams rootLayoutParams;
+    private LayoutMode layoutMode;
+    private final Map<Button, StreamKeyboardKeySpec> buttonSpecs = new HashMap<>();
     private final Map<Byte, List<Button>> stickyModifierButtons = new HashMap<>();
 
     private boolean visible = false;
@@ -77,163 +55,146 @@ public class StreamKeyboardOverlay {
     @SuppressLint("ClickableViewAccessibility")
     public StreamKeyboardOverlay(FrameLayout parent, StreamKeyboardInput keyboardInput, Context context,
                                    GrabInputCallback grabInputCallback, VisibilityBlocker visibilityBlocker) {
+        this.parent = parent;
         this.context = context;
         this.keyboardInput = keyboardInput;
         this.grabInputCallback = grabInputCallback;
         this.visibilityBlocker = visibilityBlocker;
 
+        layoutMode = resolveLayoutMode();
+        inflateAndBuild();
+    }
+
+    private LayoutMode resolveLayoutMode() {
+        Configuration config = context.getResources().getConfiguration();
+        return config.screenWidthDp > config.screenHeightDp ? LayoutMode.SPLIT_SIDE : LayoutMode.BOTTOM;
+    }
+
+    private void inflateAndBuild() {
+        if (rootView != null) {
+            parent.removeView(rootView);
+        }
+        buttonSpecs.clear();
+        stickyModifierButtons.clear();
+
         LayoutInflater inflater = LayoutInflater.from(context);
-        rootView = inflater.inflate(R.layout.stream_keyboard_overlay, parent, false);
+        if (layoutMode == LayoutMode.SPLIT_SIDE) {
+            rootView = inflater.inflate(R.layout.stream_keyboard_split_overlay, parent, false);
+            rootLayoutParams = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT);
+            buildSplitLayout();
+        } else {
+            rootView = inflater.inflate(R.layout.stream_keyboard_overlay, parent, false);
+            rootLayoutParams = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    Gravity.BOTTOM);
+            buildBottomLayout();
+        }
 
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+        parent.addView(rootView, rootLayoutParams);
+
+        View closeTarget = rootView.findViewById(R.id.stream_keyboard_root);
+        if (closeTarget == null) {
+            closeTarget = rootView;
+        }
+        Button closeButton = closeTarget.findViewById(R.id.stream_keyboard_close);
+        if (closeButton != null) {
+            closeButton.setOnClickListener(v -> hide());
+        }
+
+        rootView.setVisibility(visible ? View.VISIBLE : View.GONE);
+    }
+
+    private void buildSplitLayout() {
+        LinearLayout leftRail = rootView.findViewById(R.id.stream_keyboard_left_rail);
+        LinearLayout rightRail = rootView.findViewById(R.id.stream_keyboard_right_rail);
+
+        for (List<StreamKeyboardKeySpec> rowSpecs : StreamKeyboardLayoutBuilder.buildLeftRailRows(context)) {
+            addRowToRail(leftRail, rowSpecs);
+        }
+        for (List<StreamKeyboardKeySpec> rowSpecs : StreamKeyboardLayoutBuilder.buildRightRailRows(context)) {
+            addRowToRail(rightRail, rowSpecs);
+        }
+
+        populateRow(rootView.findViewById(R.id.stream_keyboard_nav_row_up),
+                StreamKeyboardLayoutBuilder.buildCenterNavRowUp());
+        populateRow(rootView.findViewById(R.id.stream_keyboard_nav_row_arrows),
+                StreamKeyboardLayoutBuilder.buildCenterNavRowArrows());
+
+        applyRailWidths();
+    }
+
+    private void buildBottomLayout() {
+        populateRow(R.id.stream_keyboard_row_fn, StreamKeyboardLayoutBuilder.buildBottomFnRow1(context));
+        populateRow(R.id.stream_keyboard_row_fn2, StreamKeyboardLayoutBuilder.buildBottomFnRow2());
+        populateRow(R.id.stream_keyboard_row_number, StreamKeyboardLayoutBuilder.buildBottomNumberRow(context));
+        populateRow(R.id.stream_keyboard_row_q, StreamKeyboardLayoutBuilder.buildBottomQwertyRow(context));
+        populateRow(R.id.stream_keyboard_row_a, StreamKeyboardLayoutBuilder.buildBottomAsdfRow(context));
+        populateRow(R.id.stream_keyboard_row_z, StreamKeyboardLayoutBuilder.buildBottomZxcvRow(context));
+        populateRow(R.id.stream_keyboard_row_modifiers, StreamKeyboardLayoutBuilder.buildBottomModifierRow(context));
+        populateRow(R.id.stream_keyboard_nav_row_up, StreamKeyboardLayoutBuilder.buildBottomNavRowUp());
+        populateRow(R.id.stream_keyboard_nav_row_arrows, StreamKeyboardLayoutBuilder.buildBottomNavRowArrows());
+    }
+
+    private void applyRailWidths() {
+        DisplayMetrics metrics = context.getResources().getDisplayMetrics();
+        int minWidth = context.getResources().getDimensionPixelSize(R.dimen.stream_keyboard_rail_width_min);
+        int maxWidth = context.getResources().getDimensionPixelSize(R.dimen.stream_keyboard_rail_width_max);
+        int railWidth = (int) (metrics.widthPixels * 0.28f);
+        railWidth = Math.max(minWidth, Math.min(maxWidth, railWidth));
+
+        LinearLayout leftRail = rootView.findViewById(R.id.stream_keyboard_left_rail);
+        LinearLayout rightRail = rootView.findViewById(R.id.stream_keyboard_right_rail);
+
+        ViewGroup.LayoutParams leftLp = leftRail.getLayoutParams();
+        leftLp.width = railWidth;
+        leftRail.setLayoutParams(leftLp);
+
+        ViewGroup.LayoutParams rightLp = rightRail.getLayoutParams();
+        rightLp.width = railWidth;
+        rightRail.setLayoutParams(rightLp);
+    }
+
+    private void applyBottomMaxHeight() {
+        if (!(rootView instanceof ScrollView)) {
+            return;
+        }
+        DisplayMetrics metrics = context.getResources().getDisplayMetrics();
+        int maxHeight = (int) (metrics.heightPixels * 0.32f);
+        ViewGroup.LayoutParams lp = rootView.getLayoutParams();
+        lp.height = maxHeight;
+        rootView.setLayoutParams(lp);
+    }
+
+    private void addRowToRail(LinearLayout rail, List<StreamKeyboardKeySpec> specs) {
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.BOTTOM);
-        parent.addView(rootView, lp);
-
-        Button closeButton = rootView.findViewById(R.id.stream_keyboard_close);
-        closeButton.setOnClickListener(v -> hide());
-
-        populateRow(R.id.stream_keyboard_row_fn, buildFunctionRow());
-        populateRow(R.id.stream_keyboard_row_number, buildNumberRow());
-        populateRow(R.id.stream_keyboard_row_q, buildQwertyRow());
-        populateRow(R.id.stream_keyboard_row_a, buildAsdfRow());
-        populateRow(R.id.stream_keyboard_row_z, buildZxcvRow());
-        populateRow(R.id.stream_keyboard_row_modifiers, buildModifierRow());
-        populateRow(R.id.stream_keyboard_row_nav, buildNavigationRow());
-
-        rootView.setVisibility(View.GONE);
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        populateRow(row, specs);
+        rail.addView(row);
     }
 
-    private List<KeySpec> buildFunctionRow() {
-        List<KeySpec> keys = new ArrayList<>();
-        keys.add(new KeySpec(context.getString(R.string.stream_key_esc), KeyEvent.KEYCODE_ESCAPE, 1.2f));
-        for (int i = 1; i <= 12; i++) {
-            keys.add(new KeySpec("F" + i, KeyEvent.KEYCODE_F1 + (i - 1), 1.0f));
+    private View getContentRoot() {
+        View content = rootView.findViewById(R.id.stream_keyboard_root);
+        return content != null ? content : rootView;
+    }
+
+    private void populateRow(int rowId, List<StreamKeyboardKeySpec> specs) {
+        populateRow(getContentRoot().findViewById(rowId), specs);
+    }
+
+    private void populateRow(LinearLayout row, List<StreamKeyboardKeySpec> specs) {
+        if (row == null) {
+            return;
         }
-        return keys;
-    }
-
-    private List<KeySpec> buildNumberRow() {
-        List<KeySpec> keys = new ArrayList<>();
-        keys.add(new KeySpec("`", "~", KeyEvent.KEYCODE_GRAVE, 1.0f, false));
-        for (int i = 0; i <= 9; i++) {
-            keys.add(new KeySpec(String.valueOf(i), KeyEvent.KEYCODE_0 + i, 1.0f));
-        }
-        keys.add(new KeySpec("-", "_", KeyEvent.KEYCODE_MINUS, 1.0f, false));
-        keys.add(new KeySpec("=", "+", KeyEvent.KEYCODE_EQUALS, 1.0f, false));
-        keys.add(new KeySpec(context.getString(R.string.stream_key_backspace), KeyEvent.KEYCODE_DEL, 1.8f));
-        return keys;
-    }
-
-    private List<KeySpec> buildQwertyRow() {
-        List<KeySpec> keys = new ArrayList<>();
-        keys.add(new KeySpec(context.getString(R.string.stream_key_tab), KeyEvent.KEYCODE_TAB, 1.4f));
-        addLetterKeys(keys, "qwertyuiop");
-        keys.add(new KeySpec("[", "{", KeyEvent.KEYCODE_LEFT_BRACKET, 1.0f, false));
-        keys.add(new KeySpec("]", "}", KeyEvent.KEYCODE_RIGHT_BRACKET, 1.0f, false));
-        return keys;
-    }
-
-    private List<KeySpec> buildAsdfRow() {
-        List<KeySpec> keys = new ArrayList<>();
-        keys.add(new KeySpec(context.getString(R.string.stream_key_caps), KeyEvent.KEYCODE_CAPS_LOCK, 1.6f));
-        addLetterKeys(keys, "asdfghjkl");
-        keys.add(new KeySpec(";", ":", KeyEvent.KEYCODE_SEMICOLON, 1.0f, false));
-        keys.add(new KeySpec("'", "\"", KeyEvent.KEYCODE_APOSTROPHE, 1.0f, false));
-        keys.add(new KeySpec(context.getString(R.string.stream_key_enter), KeyEvent.KEYCODE_ENTER, 1.8f));
-        return keys;
-    }
-
-    private List<KeySpec> buildZxcvRow() {
-        List<KeySpec> keys = new ArrayList<>();
-        keys.add(new KeySpec(
-                context.getString(R.string.stream_key_shift),
-                KeyEvent.KEYCODE_SHIFT_LEFT,
-                1.8f,
-                KeyboardPacket.MODIFIER_SHIFT,
-                KeyEvent.KEYCODE_SHIFT_LEFT));
-        addLetterKeys(keys, "zxcvbnm");
-        keys.add(new KeySpec(",", "<", KeyEvent.KEYCODE_COMMA, 1.0f, false));
-        keys.add(new KeySpec(".", ">", KeyEvent.KEYCODE_PERIOD, 1.0f, false));
-        keys.add(new KeySpec("/", "?", KeyEvent.KEYCODE_SLASH, 1.0f, false));
-        keys.add(new KeySpec(
-                context.getString(R.string.stream_key_shift),
-                KeyEvent.KEYCODE_SHIFT_RIGHT,
-                1.8f,
-                KeyboardPacket.MODIFIER_SHIFT,
-                KeyEvent.KEYCODE_SHIFT_RIGHT));
-        return keys;
-    }
-
-    private List<KeySpec> buildModifierRow() {
-        List<KeySpec> keys = new ArrayList<>();
-        keys.add(new KeySpec(
-                context.getString(R.string.stream_key_ctrl),
-                KeyEvent.KEYCODE_CTRL_LEFT,
-                1.2f,
-                KeyboardPacket.MODIFIER_CTRL,
-                KeyEvent.KEYCODE_CTRL_LEFT));
-        keys.add(new KeySpec(
-                context.getString(R.string.stream_key_win),
-                KeyEvent.KEYCODE_META_LEFT,
-                1.2f,
-                KeyboardPacket.MODIFIER_META,
-                KeyEvent.KEYCODE_META_LEFT));
-        keys.add(new KeySpec(
-                context.getString(R.string.stream_key_alt),
-                KeyEvent.KEYCODE_ALT_LEFT,
-                1.2f,
-                KeyboardPacket.MODIFIER_ALT,
-                KeyEvent.KEYCODE_ALT_LEFT));
-        keys.add(new KeySpec(context.getString(R.string.stream_key_space), KeyEvent.KEYCODE_SPACE, 5.0f));
-        keys.add(new KeySpec(
-                context.getString(R.string.stream_key_alt),
-                KeyEvent.KEYCODE_ALT_RIGHT,
-                1.2f,
-                KeyboardPacket.MODIFIER_ALT,
-                KeyEvent.KEYCODE_ALT_RIGHT));
-        keys.add(new KeySpec(context.getString(R.string.stream_key_menu), KeyEvent.KEYCODE_MENU, 1.2f));
-        keys.add(new KeySpec(
-                context.getString(R.string.stream_key_ctrl),
-                KeyEvent.KEYCODE_CTRL_RIGHT,
-                1.2f,
-                KeyboardPacket.MODIFIER_CTRL,
-                KeyEvent.KEYCODE_CTRL_RIGHT));
-        return keys;
-    }
-
-    private List<KeySpec> buildNavigationRow() {
-        List<KeySpec> keys = new ArrayList<>();
-        keys.add(new KeySpec(context.getString(R.string.stream_key_ins), KeyEvent.KEYCODE_INSERT, 1.2f));
-        keys.add(new KeySpec(context.getString(R.string.stream_key_home), KeyEvent.KEYCODE_MOVE_HOME, 1.2f));
-        keys.add(new KeySpec(context.getString(R.string.stream_key_pgup), KeyEvent.KEYCODE_PAGE_UP, 1.2f));
-        keys.add(new KeySpec(context.getString(R.string.stream_key_up), KeyEvent.KEYCODE_DPAD_UP, 1.2f));
-        keys.add(new KeySpec(context.getString(R.string.stream_key_left), KeyEvent.KEYCODE_DPAD_LEFT, 1.2f));
-        keys.add(new KeySpec(context.getString(R.string.stream_key_down), KeyEvent.KEYCODE_DPAD_DOWN, 1.2f));
-        keys.add(new KeySpec(context.getString(R.string.stream_key_right), KeyEvent.KEYCODE_DPAD_RIGHT, 1.2f));
-        keys.add(new KeySpec(context.getString(R.string.stream_key_del), KeyEvent.KEYCODE_FORWARD_DEL, 1.2f));
-        keys.add(new KeySpec(context.getString(R.string.stream_key_end), KeyEvent.KEYCODE_MOVE_END, 1.2f));
-        keys.add(new KeySpec(context.getString(R.string.stream_key_pgdn), KeyEvent.KEYCODE_PAGE_DOWN, 1.2f));
-        return keys;
-    }
-
-    private void addLetterKeys(List<KeySpec> keys, String chars) {
-        for (int i = 0; i < chars.length(); i++) {
-            char c = chars.charAt(i);
-            if (c == ' ') {
+        for (StreamKeyboardKeySpec spec : specs) {
+            if (spec.keyCode == KeyEvent.KEYCODE_UNKNOWN) {
                 continue;
             }
-            String lower = String.valueOf(c);
-            String upper = lower.toUpperCase();
-            int keyCode = KeyEvent.KEYCODE_A + (Character.toLowerCase(c) - 'a');
-            keys.add(new KeySpec(lower, upper, keyCode, 1.0f, true));
-        }
-    }
-
-    private void populateRow(int rowId, List<KeySpec> specs) {
-        LinearLayout row = rootView.findViewById(rowId);
-        for (KeySpec spec : specs) {
             Button button = createKeyButton(spec);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                     0, ViewGroup.LayoutParams.WRAP_CONTENT, spec.widthWeight);
@@ -244,7 +205,7 @@ public class StreamKeyboardOverlay {
     }
 
     @SuppressLint("ClickableViewAccessibility")
-    private Button createKeyButton(KeySpec spec) {
+    private Button createKeyButton(StreamKeyboardKeySpec spec) {
         Button button = new Button(context);
         button.setAllCaps(false);
         button.setText(getButtonLabel(spec));
@@ -271,7 +232,7 @@ public class StreamKeyboardOverlay {
         return button;
     }
 
-    private boolean handleKeyTouch(Button button, KeySpec spec, MotionEvent event) {
+    private boolean handleKeyTouch(Button button, StreamKeyboardKeySpec spec, MotionEvent event) {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 button.setPressed(true);
@@ -289,19 +250,19 @@ public class StreamKeyboardOverlay {
         }
     }
 
-    private void onKeyDown(KeySpec spec) {
+    private void onKeyDown(StreamKeyboardKeySpec spec) {
         if (spec.stickyModifierMask != 0) {
             return;
         }
         keyboardInput.sendAndroidKey(spec.keyCode, true);
     }
 
-    private void onKeyUp(KeySpec spec) {
+    private void onKeyUp(StreamKeyboardKeySpec spec) {
         if (spec.stickyModifierMask != 0) {
             keyboardInput.toggleModifier(spec.stickyModifierMask, spec.stickyModifierKeyCode);
             updateStickyModifierButtons();
             if (spec.stickyModifierMask == KeyboardPacket.MODIFIER_SHIFT) {
-                updateLetterLabels();
+                updateShiftedLabels();
             }
             return;
         }
@@ -314,16 +275,14 @@ public class StreamKeyboardOverlay {
 
         if (keyboardInput.isModifierActive(KeyboardPacket.MODIFIER_SHIFT)
                 && spec.keyCode != KeyEvent.KEYCODE_SHIFT_LEFT
-                && spec.keyCode != KeyEvent.KEYCODE_SHIFT_RIGHT) {
-            // One-shot shift behavior for character keys typed with shift held via sticky key
-            if (spec.isLetter) {
-                keyboardInput.setModifierHeld(
-                        KeyboardPacket.MODIFIER_SHIFT,
-                        KeyEvent.KEYCODE_SHIFT_LEFT,
-                        false);
-                updateStickyModifierButtons();
-                updateLetterLabels();
-            }
+                && spec.keyCode != KeyEvent.KEYCODE_SHIFT_RIGHT
+                && spec.isLetter) {
+            keyboardInput.setModifierHeld(
+                    KeyboardPacket.MODIFIER_SHIFT,
+                    KeyEvent.KEYCODE_SHIFT_LEFT,
+                    false);
+            updateStickyModifierButtons();
+            updateShiftedLabels();
         }
     }
 
@@ -339,18 +298,38 @@ public class StreamKeyboardOverlay {
         }
     }
 
-    private String getButtonLabel(KeySpec spec) {
+    private String getButtonLabel(StreamKeyboardKeySpec spec) {
         if (keyboardInput.isModifierActive(KeyboardPacket.MODIFIER_SHIFT) && spec.shiftedLabel != null) {
             return spec.shiftedLabel;
         }
         return spec.label;
     }
 
-    private void updateLetterLabels() {
-        for (Map.Entry<Button, KeySpec> entry : buttonSpecs.entrySet()) {
+    private void updateShiftedLabels() {
+        for (Map.Entry<Button, StreamKeyboardKeySpec> entry : buttonSpecs.entrySet()) {
             if (entry.getValue().shiftedLabel != null) {
                 entry.getKey().setText(getButtonLabel(entry.getValue()));
             }
+        }
+    }
+
+    public void refreshLayoutMode() {
+        boolean wasVisible = visible;
+        LayoutMode newMode = resolveLayoutMode();
+        if (newMode == layoutMode && rootView != null) {
+            if (layoutMode == LayoutMode.SPLIT_SIDE) {
+                applyRailWidths();
+            } else {
+                applyBottomMaxHeight();
+            }
+            return;
+        }
+
+        layoutMode = newMode;
+        inflateAndBuild();
+
+        if (wasVisible) {
+            show();
         }
     }
 
@@ -376,22 +355,31 @@ public class StreamKeyboardOverlay {
         }
 
         grabInputCallback.ensureInputGrabbed();
+
+        if (layoutMode == LayoutMode.SPLIT_SIDE) {
+            applyRailWidths();
+        } else {
+            applyBottomMaxHeight();
+        }
+
         rootView.setVisibility(View.VISIBLE);
         visible = true;
         rootView.requestLayout();
         updateStickyModifierButtons();
-        updateLetterLabels();
+        updateShiftedLabels();
     }
 
     public void hide() {
-        rootView.setVisibility(View.GONE);
+        if (rootView != null) {
+            rootView.setVisibility(View.GONE);
+        }
         visible = false;
     }
 
     public void destroy() {
-        ViewGroup parent = (ViewGroup) rootView.getParent();
-        if (parent != null) {
+        if (rootView != null) {
             parent.removeView(rootView);
+            rootView = null;
         }
     }
 }
