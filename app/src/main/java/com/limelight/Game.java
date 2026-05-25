@@ -15,6 +15,7 @@ import com.limelight.binding.input.touch.TouchContext;
 import com.limelight.binding.input.stream_keyboard.StreamKeyboardInput;
 import com.limelight.binding.input.stream_keyboard.StreamKeyboardOverlay;
 import com.limelight.binding.input.virtual_controller.VirtualController;
+import com.limelight.binding.input.virtual_mouse.VirtualMouse;
 import com.limelight.binding.video.CrashListener;
 import com.limelight.binding.video.MediaCodecDecoderRenderer;
 import com.limelight.binding.video.MediaCodecHelper;
@@ -115,6 +116,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private StreamKeyboardInput streamKeyboardInput;
     private StreamKeyboardOverlay streamKeyboardOverlay;
     private VirtualController virtualController;
+    private VirtualMouse virtualMouse;
 
     private PreferenceConfiguration prefConfig;
     private SharedPreferences tombstonePrefs;
@@ -536,6 +538,15 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             virtualController.show();
         }
 
+        if (prefConfig.showVirtualMouse) {
+            virtualMouse = new VirtualMouse(conn,
+                    (FrameLayout) streamView.getParent(),
+                    streamView,
+                    this);
+            virtualMouse.refreshLayout();
+            virtualMouse.show();
+        }
+
         if (prefConfig.usbDriver) {
             // Start the USB driver
             bindService(new Intent(this, UsbDriverService.class),
@@ -609,6 +620,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             virtualController.refreshLayout();
         }
 
+        if (virtualMouse != null) {
+            virtualMouse.refreshLayout();
+        }
+
         if (streamKeyboardOverlay != null) {
             streamKeyboardOverlay.refreshLayoutMode();
         }
@@ -620,6 +635,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
                 if (virtualController != null) {
                     virtualController.hide();
+                }
+
+                if (virtualMouse != null) {
+                    virtualMouse.hide();
                 }
 
                 performanceOverlayView.setVisibility(View.GONE);
@@ -638,6 +657,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
                 if (virtualController != null) {
                     virtualController.show();
+                }
+
+                if (virtualMouse != null) {
+                    virtualMouse.show();
                 }
 
                 if (prefConfig.enablePerfOverlay) {
@@ -1065,6 +1088,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             streamKeyboardOverlay.destroy();
             streamKeyboardOverlay = null;
         }
+        if (virtualMouse != null) {
+            virtualMouse.removeElements();
+            virtualMouse = null;
+        }
         if (keyboardTranslator != null) {
             InputManager inputManager = (InputManager) getSystemService(Context.INPUT_SERVICE);
             inputManager.unregisterInputDeviceListener(keyboardTranslator);
@@ -1110,6 +1137,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
         if (virtualController != null) {
             virtualController.hide();
+        }
+
+        if (virtualMouse != null) {
+            virtualMouse.hide();
         }
 
         if (conn != null) {

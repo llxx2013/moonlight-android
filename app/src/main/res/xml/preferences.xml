@@ -153,6 +153,11 @@
             android:summary="@string/summary_checkbox_show_onscreen_controls"
             android:title="@string/title_checkbox_show_onscreen_controls" />
         <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="checkbox_show_virtual_mouse"
+            android:summary="@string/summary_checkbox_show_virtual_mouse"
+            android:title="@string/title_checkbox_show_virtual_mouse" />
+        <CheckBoxPreference
             android:key="checkbox_vibrate_osc"
             android:dependency="checkbox_show_onscreen_controls"
             android:title="@string/title_checkbox_vibrate_osc"
