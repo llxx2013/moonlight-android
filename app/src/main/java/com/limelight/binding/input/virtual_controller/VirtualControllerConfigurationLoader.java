@@ -18,6 +18,20 @@ import org.json.JSONObject;
 public class VirtualControllerConfigurationLoader {
     public static final String OSC_PREFERENCE = "OSC";
 
+    public static final int OSC_ANALOG_STICK_UNITS = 26;
+    public static final int OSC_FACE_BUTTON_UNITS = 10;
+    public static final int OSC_BOTTOM_MARGIN_UNITS = 4;
+    public static final int OSC_SIDE_MARGIN_UNITS = 6;
+    public static final int OSC_ELEMENT_GAP_UNITS = 2;
+
+    public static int oscScreenScale(int gridUnits, int screenHeightPixels) {
+        return screenScale(gridUnits, screenHeightPixels);
+    }
+
+    public static int getOscDefaultStrokeWidth(Context context) {
+        return (int) (context.getResources().getDisplayMetrics().heightPixels * 0.004f);
+    }
+
     private static int getPercent(
             int percent,
             int total) {

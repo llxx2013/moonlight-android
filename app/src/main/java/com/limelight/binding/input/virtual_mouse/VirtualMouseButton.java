@@ -8,6 +8,7 @@ import android.graphics.RectF;
 import android.view.MotionEvent;
 import android.view.View;
 
+import com.limelight.binding.input.virtual_controller.VirtualControllerConfigurationLoader;
 import com.limelight.nvstream.NvConnection;
 import com.limelight.nvstream.input.MouseButtonPacket;
 
@@ -46,7 +47,7 @@ public class VirtualMouseButton extends View {
 
     @Override
     protected void onDraw(Canvas canvas) {
-        int strokeWidth = Math.max(2, getHeight() / 40);
+        int strokeWidth = Math.max(2, VirtualControllerConfigurationLoader.getOscDefaultStrokeWidth(getContext()));
         borderPaint.setStrokeWidth(strokeWidth);
         textPaint.setTextSize(getHeight() * 0.35f);
 

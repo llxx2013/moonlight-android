@@ -11,6 +11,7 @@ import android.view.MotionEvent;
 import android.view.View;
 
 import com.limelight.binding.input.MouseStickEmulationHelper;
+import com.limelight.binding.input.virtual_controller.VirtualControllerConfigurationLoader;
 import com.limelight.nvstream.NvConnection;
 
 public class VirtualMoveStick extends View {
@@ -66,10 +67,14 @@ public class VirtualMoveStick extends View {
         paint.setStyle(Paint.Style.STROKE);
     }
 
+    private int getStrokeWidth() {
+        return Math.max(2, VirtualControllerConfigurationLoader.getOscDefaultStrokeWidth(getContext()));
+    }
+
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         int size = Math.min(w, h);
-        int strokeWidth = Math.max(2, size / 80);
+        int strokeWidth = getStrokeWidth();
         radiusComplete = size / 2f - 2 * strokeWidth;
         radiusDeadZone = radiusComplete * 0.30f;
         radiusAnalogStick = radiusComplete * 0.20f;
@@ -82,7 +87,7 @@ public class VirtualMoveStick extends View {
     protected void onDraw(Canvas canvas) {
         canvas.drawColor(Color.TRANSPARENT);
 
-        int strokeWidth = Math.max(2, getHeight() / 80);
+        int strokeWidth = getStrokeWidth();
         paint.setStrokeWidth(strokeWidth);
         float cx = getWidth() / 2f;
         float cy = getHeight() / 2f;

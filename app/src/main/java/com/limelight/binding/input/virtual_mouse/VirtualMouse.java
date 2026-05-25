@@ -7,6 +7,7 @@ import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import com.limelight.R;
+import com.limelight.binding.input.virtual_controller.VirtualControllerConfigurationLoader;
 import com.limelight.nvstream.NvConnection;
 import com.limelight.nvstream.input.MouseButtonPacket;
 
@@ -15,10 +16,6 @@ import java.util.List;
 
 public class VirtualMouse {
     private static final float OPACITY = 0.45f;
-    private static final int MARGIN_DP = 15;
-    private static final float STICK_SIZE_RATIO = 0.14f;
-    private static final float BUTTON_SIZE_RATIO = 0.06f;
-    private static final float ELEMENT_GAP_RATIO = 0.01f;
 
     private final NvConnection conn;
     private final FrameLayout parent;
@@ -36,41 +33,46 @@ public class VirtualMouse {
         removeElements();
 
         DisplayMetrics screen = context.getResources().getDisplayMetrics();
-        float density = screen.density;
-        int margin = (int) (MARGIN_DP * density);
         int width = screen.widthPixels;
         int height = screen.heightPixels;
 
-        int stickSize = (int) (height * STICK_SIZE_RATIO);
-        int buttonSize = (int) (height * BUTTON_SIZE_RATIO);
-        int gap = Math.max(margin / 2, (int) (height * ELEMENT_GAP_RATIO));
+        int stickSize = VirtualControllerConfigurationLoader.oscScreenScale(
+                VirtualControllerConfigurationLoader.OSC_ANALOG_STICK_UNITS, height);
+        int buttonSize = VirtualControllerConfigurationLoader.oscScreenScale(
+                VirtualControllerConfigurationLoader.OSC_FACE_BUTTON_UNITS, height);
+        int bottomMargin = VirtualControllerConfigurationLoader.oscScreenScale(
+                VirtualControllerConfigurationLoader.OSC_BOTTOM_MARGIN_UNITS, height);
+        int sideMargin = VirtualControllerConfigurationLoader.oscScreenScale(
+                VirtualControllerConfigurationLoader.OSC_SIDE_MARGIN_UNITS, height);
+        int gap = VirtualControllerConfigurationLoader.oscScreenScale(
+                VirtualControllerConfigurationLoader.OSC_ELEMENT_GAP_UNITS, height);
 
-        int moveStickX = width - margin - stickSize;
-        int moveStickY = height - margin - stickSize;
+        int stickY = height - bottomMargin - stickSize;
+        int buttonY = height - bottomMargin - buttonSize;
 
-        int scrollStickX = moveStickX - gap - stickSize;
-        int scrollStickY = moveStickY;
+        int scrollStickX = sideMargin;
+        int moveStickX = width - sideMargin - stickSize;
 
-        int buttonColumnX = scrollStickX - gap - buttonSize;
-        int buttonBottomY = moveStickY + stickSize - buttonSize;
-
-        VirtualMoveStick moveStick = new VirtualMoveStick(context, conn);
-        addElement(moveStick, moveStickX, moveStickY, stickSize, stickSize);
+        int buttonsTotal = 3 * buttonSize + 2 * gap;
+        int buttonsLeft = (width - buttonsTotal) / 2;
 
         VirtualRotaryScrollStick scrollStick = new VirtualRotaryScrollStick(context, conn);
-        addElement(scrollStick, scrollStickX, scrollStickY, stickSize, stickSize);
+        addElement(scrollStick, scrollStickX, stickY, stickSize, stickSize);
+
+        VirtualMoveStick moveStick = new VirtualMoveStick(context, conn);
+        addElement(moveStick, moveStickX, stickY, stickSize, stickSize);
 
         VirtualMouseButton leftButton = new VirtualMouseButton(
                 context, conn, MouseButtonPacket.BUTTON_LEFT, "L");
-        addElement(leftButton, buttonColumnX, buttonBottomY, buttonSize, buttonSize);
+        addElement(leftButton, buttonsLeft, buttonY, buttonSize, buttonSize);
 
         VirtualMouseButton rightButton = new VirtualMouseButton(
                 context, conn, MouseButtonPacket.BUTTON_RIGHT, "R");
-        addElement(rightButton, buttonColumnX, buttonBottomY - gap - buttonSize, buttonSize, buttonSize);
+        addElement(rightButton, buttonsLeft + buttonSize + gap, buttonY, buttonSize, buttonSize);
 
         VirtualMouseButton middleButton = new VirtualMouseButton(
                 context, conn, MouseButtonPacket.BUTTON_MIDDLE, "M");
-        addElement(middleButton, buttonColumnX, buttonBottomY - (gap + buttonSize) * 2, buttonSize, buttonSize);
+        addElement(middleButton, buttonsLeft + 2 * (buttonSize + gap), buttonY, buttonSize, buttonSize);
 
         setOpacity(OPACITY);
         applyVisibility();
