@@ -300,4 +300,27 @@
     <string name="analogscroll_none">None (both sticks move the mouse)</string>
     <string name="analogscroll_right">Right analog stick</string>
     <string name="analogscroll_left">Left analog stick</string>
+
+    <string name="stream_keyboard_close">Close</string>
+    <string name="stream_key_esc">Esc</string>
+    <string name="stream_key_tab">Tab</string>
+    <string name="stream_key_caps">Caps</string>
+    <string name="stream_key_shift">Shift</string>
+    <string name="stream_key_ctrl">Ctrl</string>
+    <string name="stream_key_alt">Alt</string>
+    <string name="stream_key_win">Win</string>
+    <string name="stream_key_menu">Menu</string>
+    <string name="stream_key_space">Space</string>
+    <string name="stream_key_enter">Enter</string>
+    <string name="stream_key_backspace">Bksp</string>
+    <string name="stream_key_ins">Ins</string>
+    <string name="stream_key_home">Home</string>
+    <string name="stream_key_pgup">PgUp</string>
+    <string name="stream_key_pgdn">PgDn</string>
+    <string name="stream_key_end">End</string>
+    <string name="stream_key_del">Del</string>
+    <string name="stream_key_up">Up</string>
+    <string name="stream_key_down">Down</string>
+    <string name="stream_key_left">Left</string>
+    <string name="stream_key_right">Right</string>
 </resources>
