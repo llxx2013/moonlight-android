@@ -109,17 +109,16 @@ public class VirtualRotaryScrollStick extends View {
         float dx = event.getX() - cx;
         float dy = event.getY() - cy;
         float dist = (float) Math.sqrt(dx * dx + dy * dy);
-
-        if (dist > radiusComplete && !pressed) {
-            return false;
-        }
+        boolean insideCircle = dist <= radiusComplete;
 
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
-                requestUnbufferedDispatch(event);
-                pressed = true;
-                lastAngle = getAngleFromCenter(event.getX(), event.getY());
-                hasLastAngle = true;
+                if (insideCircle) {
+                    requestUnbufferedDispatch(event);
+                    pressed = true;
+                    lastAngle = getAngleFromCenter(event.getX(), event.getY());
+                    hasLastAngle = true;
+                }
                 break;
 
             case MotionEvent.ACTION_MOVE:
@@ -136,8 +135,10 @@ public class VirtualRotaryScrollStick extends View {
 
             case MotionEvent.ACTION_CANCEL:
             case MotionEvent.ACTION_UP:
-                pressed = false;
-                hasLastAngle = false;
+                if (pressed) {
+                    pressed = false;
+                    hasLastAngle = false;
+                }
                 break;
 
             default:

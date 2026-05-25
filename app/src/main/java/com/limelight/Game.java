@@ -243,6 +243,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
         // Listen for non-touch events on the game surface
         streamView = findViewById(R.id.surfaceView);
+        streamView.setZOrderMediaOverlay(true);
         streamView.setOnGenericMotionListener(this);
         streamView.setOnKeyListener(this);
         streamView.setInputCallbacks(this);
@@ -2044,6 +2045,11 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             // This case is for fingers
             else
             {
+                if (virtualMouse != null && virtualMouse.isVisible()
+                        && virtualMouse.containsScreenPoint(event.getRawX(), event.getRawY())) {
+                    return true;
+                }
+
                 if (virtualController != null &&
                         (virtualController.getControllerMode() == VirtualController.ControllerMode.MoveButtons ||
                          virtualController.getControllerMode() == VirtualController.ControllerMode.ResizeButtons)) {

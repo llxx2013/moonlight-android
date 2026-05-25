@@ -51,16 +51,12 @@ public class VirtualMouse {
         int buttonY = height - bottomMargin - buttonSize;
 
         int scrollStickX = sideMargin;
-        int moveStickX = width - sideMargin - stickSize;
 
         int buttonsTotal = 3 * buttonSize + 2 * gap;
         int buttonsLeft = (width - buttonsTotal) / 2;
 
         VirtualRotaryScrollStick scrollStick = new VirtualRotaryScrollStick(context, conn);
         addElement(scrollStick, scrollStickX, stickY, stickSize, stickSize);
-
-        VirtualMoveStick moveStick = new VirtualMoveStick(context, conn);
-        addElement(moveStick, moveStickX, stickY, stickSize, stickSize);
 
         VirtualMouseButton leftButton = new VirtualMouseButton(
                 context, conn, MouseButtonPacket.BUTTON_LEFT, "L");
@@ -76,6 +72,10 @@ public class VirtualMouse {
 
         setOpacity(OPACITY);
         applyVisibility();
+
+        for (View element : elements) {
+            element.bringToFront();
+        }
     }
 
     private void addElement(View element, int x, int y, int width, int height) {
@@ -83,6 +83,23 @@ public class VirtualMouse {
         FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(width, height);
         layoutParams.setMargins(x, y, 0, 0);
         parent.addView(element, layoutParams);
+        element.bringToFront();
+        element.setElevation(8f);
+    }
+
+    public boolean containsScreenPoint(float rawX, float rawY) {
+        if (!visible) {
+            return false;
+        }
+        for (View element : elements) {
+            int[] loc = new int[2];
+            element.getLocationOnScreen(loc);
+            if (rawX >= loc[0] && rawX < loc[0] + element.getWidth()
+                    && rawY >= loc[1] && rawY < loc[1] + element.getHeight()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void setOpacity(float opacity) {

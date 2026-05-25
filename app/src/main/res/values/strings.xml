@@ -206,7 +206,7 @@
     <string name="title_checkbox_show_onscreen_controls">Show on-screen controls</string>
     <string name="summary_checkbox_show_onscreen_controls">Show virtual controller overlay on touchscreen</string>
     <string name="title_checkbox_show_virtual_mouse">Show virtual mouse</string>
-    <string name="summary_checkbox_show_virtual_mouse">Show on-screen move stick, scroll wheel, and mouse buttons while streaming. Use a four-finger tap to toggle visibility.</string>
+    <string name="summary_checkbox_show_virtual_mouse">Show on-screen scroll wheel and mouse buttons while streaming. Use a four-finger tap to toggle visibility.</string>
     <string name="toast_virtual_mouse_shown">Virtual mouse shown</string>
     <string name="toast_virtual_mouse_hidden">Virtual mouse hidden</string>
     <string name="title_checkbox_vibrate_osc">Enable vibration</string>
