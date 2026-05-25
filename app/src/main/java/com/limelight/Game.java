@@ -99,6 +99,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     // Only 2 touches are supported
     private final TouchContext[] touchContextMap = new TouchContext[2];
     private long threeFingerDownTime = 0;
+    private long fourFingerDownTime = 0;
+    private boolean fourFingerGestureActive = false;
 
     private static final int REFERENCE_HORIZ_RES = 1280;
     private static final int REFERENCE_VERT_RES = 720;
@@ -541,7 +543,6 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         if (prefConfig.showVirtualMouse) {
             virtualMouse = new VirtualMouse(conn,
                     (FrameLayout) streamView.getParent(),
-                    streamView,
                     this);
             virtualMouse.refreshLayout();
             virtualMouse.show();
@@ -1548,6 +1549,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         }
     }
 
+    private void toggleVirtualMouse() {
+        if (virtualMouse != null) {
+            virtualMouse.toggleVisibility();
+        }
+    }
+
     private byte getLiTouchTypeFromEvent(MotionEvent event) {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
@@ -2061,6 +2068,20 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 int eventX = (int)(event.getX(actionIndex) + xOffset);
                 int eventY = (int)(event.getY(actionIndex) + yOffset);
 
+                // Special handling for 4 finger gesture (toggle virtual mouse)
+                if (prefConfig.showVirtualMouse &&
+                        event.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN &&
+                        event.getPointerCount() == 4) {
+                    fourFingerDownTime = event.getEventTime();
+                    fourFingerGestureActive = true;
+
+                    for (TouchContext aTouchContext : touchContextMap) {
+                        aTouchContext.cancelTouch();
+                    }
+
+                    return true;
+                }
+
                 // Special handling for 3 finger gesture
                 if (event.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN &&
                         event.getPointerCount() == 3) {
@@ -2104,6 +2125,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                     if (event.getPointerCount() == 1 &&
                             (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || (event.getFlags() & MotionEvent.FLAG_CANCELED) == 0)) {
                         // All fingers up
+                        if (fourFingerGestureActive &&
+                                event.getEventTime() - fourFingerDownTime < THREE_FINGER_TAP_THRESHOLD) {
+                            toggleVirtualMouse();
+                            fourFingerGestureActive = false;
+                            return true;
+                        }
                         if (event.getEventTime() - threeFingerDownTime < THREE_FINGER_TAP_THRESHOLD) {
                             // This is a 3 finger tap to bring up the keyboard
                             toggleKeyboard();
