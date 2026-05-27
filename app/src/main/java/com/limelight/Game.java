@@ -1680,7 +1680,9 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         }
 
         if (!zoomModeEnabled) {
-            resetZoomTransform();
+            zoomPanActive = false;
+            constrainZoomTranslation();
+            applyZoomTransform();
             Toast.makeText(this, R.string.toast_zoom_mode_off, Toast.LENGTH_SHORT).show();
         } else {
             // Ensure transform state is applied immediately after enabling.
