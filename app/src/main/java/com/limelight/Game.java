@@ -72,6 +72,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.SurfaceHolder;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.View.OnGenericMotionListener;
 import android.view.View.OnSystemUiVisibilityChangeListener;
@@ -111,6 +112,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private static final int STYLUS_UP_DEAD_ZONE_RADIUS = 50;
 
     private static final int THREE_FINGER_TAP_THRESHOLD = 300;
+    private static final float MIN_ZOOM_SCALE = 1.0f;
+    private static final float MAX_ZOOM_SCALE = 3.0f;
 
     private ControllerHandler controllerHandler;
     private KeyboardTranslator keyboardTranslator;
@@ -152,6 +155,15 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private TextView notificationOverlayView;
     private int requestedNotificationOverlayVisibility = View.GONE;
     private TextView performanceOverlayView;
+    private boolean zoomModeEnabled;
+    private float zoomScale = 1.0f;
+    private float zoomTranslationX;
+    private float zoomTranslationY;
+    private float zoomLastFocusX;
+    private float zoomLastFocusY;
+    private boolean zoomPanActive;
+    private ScaleGestureDetector zoomScaleGestureDetector;
+    private View zoomGestureSourceView;
 
     private MediaCodecDecoderRenderer decoderRenderer;
     private boolean reportedCrash;
@@ -247,6 +259,33 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         streamView.setOnGenericMotionListener(this);
         streamView.setOnKeyListener(this);
         streamView.setInputCallbacks(this);
+        zoomScaleGestureDetector = new ScaleGestureDetector(this, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            @Override
+            public boolean onScale(ScaleGestureDetector detector) {
+                if (!zoomModeEnabled) {
+                    return false;
+                }
+
+                float oldScale = zoomScale;
+                float newScale = clampZoomScale(oldScale * detector.getScaleFactor());
+                if (newScale == oldScale) {
+                    return false;
+                }
+
+                float[] focus = getEventPointInStreamCoordinates(
+                        zoomScaleGestureDetector.getFocusX(),
+                        zoomScaleGestureDetector.getFocusY(),
+                        zoomGestureSourceView);
+                float scaleChange = newScale / oldScale;
+                zoomScale = newScale;
+                zoomTranslationX = focus[0] - (focus[0] - zoomTranslationX) * scaleChange;
+                zoomTranslationY = focus[1] - (focus[1] - zoomTranslationY) * scaleChange;
+
+                constrainZoomTranslation();
+                applyZoomTransform();
+                return true;
+            }
+        });
 
         // Listen for touch events on the background touch view to enable trackpad mode
         // to work on areas outside of the StreamView itself. We use a separate View
@@ -564,6 +603,11 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                         toggleVirtualMouse();
                         syncQuickSideMenuState();
                     }
+
+                    @Override
+                    public void onToggleZoomMode() {
+                        toggleZoomMode();
+                    }
                 });
         streamQuickSideMenu.setMouseToggleAvailable(virtualMouse != null);
         syncQuickSideMenuState();
@@ -650,6 +694,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         }
 
         syncQuickSideMenuState();
+
+        // Keep behavior simple for phase 1: avoid keeping a potentially invalid transform
+        // across configuration changes.
+        if (zoomModeEnabled) {
+            resetZoomTransform();
+        }
 
         // Hide on-screen overlays in PiP mode
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -1600,12 +1650,164 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         streamQuickSideMenu.setMouseToggleAvailable(virtualMouse != null);
         streamQuickSideMenu.syncToggleState(
                 streamKeyboardOverlay != null && streamKeyboardOverlay.isVisible(),
-                virtualMouse != null && virtualMouse.isVisible());
+                virtualMouse != null && virtualMouse.isVisible(),
+                zoomModeEnabled);
     }
 
     private void toggleVirtualMouse() {
         if (virtualMouse != null) {
             virtualMouse.toggleVisibility();
+        }
+    }
+
+    private void toggleZoomMode() {
+        setZoomModeEnabled(!zoomModeEnabled);
+    }
+
+    private void setZoomModeEnabled(boolean enabled) {
+        if (zoomModeEnabled == enabled) {
+            return;
+        }
+
+        zoomModeEnabled = enabled;
+
+        // Cancel any in-flight touches so we don't leave the host with stuck button state.
+        for (TouchContext aTouchContext : touchContextMap) {
+            if (aTouchContext != null) {
+                aTouchContext.cancelTouch();
+                aTouchContext.setPointerCount(0);
+            }
+        }
+
+        if (!zoomModeEnabled) {
+            resetZoomTransform();
+            Toast.makeText(this, R.string.toast_zoom_mode_off, Toast.LENGTH_SHORT).show();
+        } else {
+            // Ensure transform state is applied immediately after enabling.
+            applyZoomTransform();
+            Toast.makeText(this, R.string.toast_zoom_mode_on, Toast.LENGTH_SHORT).show();
+        }
+
+        if (streamQuickSideMenu != null) {
+            syncQuickSideMenuState();
+        }
+    }
+
+    private void resetZoomTransform() {
+        zoomScale = 1.0f;
+        zoomTranslationX = 0.0f;
+        zoomTranslationY = 0.0f;
+        zoomPanActive = false;
+        applyZoomTransform();
+    }
+
+    private void applyZoomTransform() {
+        if (streamView == null) {
+            return;
+        }
+        streamView.setScaleX(zoomScale);
+        streamView.setScaleY(zoomScale);
+        streamView.setTranslationX(zoomTranslationX);
+        streamView.setTranslationY(zoomTranslationY);
+    }
+
+    private static float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static float clampZoomScale(float scale) {
+        return clamp(scale, MIN_ZOOM_SCALE, MAX_ZOOM_SCALE);
+    }
+
+    private void constrainZoomTranslation() {
+        if (streamView == null) {
+            return;
+        }
+
+        // Keep the scaled surface from being dragged too far out of view.
+        float extraWidth = (zoomScale - 1.0f) * streamView.getWidth();
+        float extraHeight = (zoomScale - 1.0f) * streamView.getHeight();
+
+        float maxTransX = extraWidth / 2.0f;
+        float maxTransY = extraHeight / 2.0f;
+
+        zoomTranslationX = clamp(zoomTranslationX, -maxTransX, maxTransX);
+        zoomTranslationY = clamp(zoomTranslationY, -maxTransY, maxTransY);
+    }
+
+    private float[] getEventPointInStreamCoordinates(float eventX, float eventY, View sourceView) {
+        float x = eventX;
+        float y = eventY;
+        if (sourceView != null && sourceView != streamView) {
+            x -= streamView.getX();
+            y -= streamView.getY();
+        }
+
+        // Convert from current transformed coordinates back to the base StreamView coordinates.
+        // (translation is applied after scaling).
+        x = (x - zoomTranslationX) / zoomScale;
+        y = (y - zoomTranslationY) / zoomScale;
+
+        return new float[] { x, y };
+    }
+
+    private boolean handleZoomPanMotionEvent(View view, MotionEvent event) {
+        if (!zoomModeEnabled) {
+            return false;
+        }
+
+        zoomGestureSourceView = view;
+        zoomScaleGestureDetector.onTouchEvent(event);
+
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                zoomPanActive = true;
+                zoomLastFocusX = event.getX(0);
+                zoomLastFocusY = event.getY(0);
+                return true;
+
+            case MotionEvent.ACTION_POINTER_DOWN:
+                if (event.getPointerCount() >= 2) {
+                    zoomPanActive = false;
+                }
+                return true;
+
+            case MotionEvent.ACTION_MOVE:
+                // Only allow panning while not scaling (single pointer drag).
+                if (event.getPointerCount() == 1 && zoomPanActive) {
+                    float x = event.getX(0);
+                    float y = event.getY(0);
+
+                    float dx = x - zoomLastFocusX;
+                    float dy = y - zoomLastFocusY;
+
+                    zoomTranslationX += dx;
+                    zoomTranslationY += dy;
+                    zoomLastFocusX = x;
+                    zoomLastFocusY = y;
+
+                    constrainZoomTranslation();
+                    applyZoomTransform();
+                }
+                return true;
+
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                zoomPanActive = false;
+                return true;
+
+            case MotionEvent.ACTION_POINTER_UP:
+                // When the gesture leaves one finger on screen, allow panning again.
+                if (event.getPointerCount() - 1 == 1) {
+                    int remainingIndex = event.getActionIndex() == 0 ? 1 : 0;
+                    zoomLastFocusX = event.getX(remainingIndex);
+                    zoomLastFocusY = event.getY(remainingIndex);
+                    zoomPanActive = true;
+                }
+                return true;
+
+            default:
+                return true;
         }
     }
 
@@ -2098,6 +2300,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             // This case is for fingers
             else
             {
+                if (zoomModeEnabled) {
+                    return handleZoomPanMotionEvent(view, event);
+                }
+
                 if (virtualMouse != null && virtualMouse.isVisible()
                         && virtualMouse.containsScreenPoint(event.getRawX(), event.getRawY())) {
                     return true;

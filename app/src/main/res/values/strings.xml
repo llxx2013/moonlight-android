@@ -213,8 +213,11 @@
     <string name="quick_side_menu_collapse">Collapse quick menu</string>
     <string name="quick_side_menu_toggle_keyboard">Toggle virtual keyboard</string>
     <string name="quick_side_menu_toggle_mouse">Toggle virtual mouse</string>
+    <string name="quick_side_menu_toggle_zoom">Toggle zoom mode</string>
     <string name="toast_stream_keyboard_shown">Virtual keyboard shown</string>
     <string name="toast_stream_keyboard_hidden">Virtual keyboard hidden</string>
+    <string name="toast_zoom_mode_on">Observer mode enabled</string>
+    <string name="toast_zoom_mode_off">Observer mode disabled</string>
     <string name="title_checkbox_vibrate_osc">Enable vibration</string>
     <string name="summary_checkbox_vibrate_osc">Vibrates your device to emulate rumble for the on-screen controls</string>
     <string name="title_only_l3r3">Only show L3 and R3</string>

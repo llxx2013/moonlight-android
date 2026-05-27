@@ -14,6 +14,7 @@ public class StreamQuickSideMenu {
     public interface Listener {
         void onToggleKeyboard();
         void onToggleMouse();
+        void onToggleZoomMode();
     }
 
     private final FrameLayout parent;
@@ -25,6 +26,7 @@ public class StreamQuickSideMenu {
     private LinearLayout actionsLayout;
     private ImageButton keyboardButton;
     private ImageButton mouseButton;
+    private ImageButton zoomButton;
 
     private boolean expanded = false;
     private boolean mouseToggleAvailable = false;
@@ -42,6 +44,7 @@ public class StreamQuickSideMenu {
         actionsLayout = rootView.findViewById(R.id.quick_side_menu_actions);
         keyboardButton = rootView.findViewById(R.id.quick_side_menu_keyboard);
         mouseButton = rootView.findViewById(R.id.quick_side_menu_mouse);
+        zoomButton = rootView.findViewById(R.id.quick_side_menu_zoom);
 
         int marginEnd = (int) (8 * context.getResources().getDisplayMetrics().density);
         FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(
@@ -57,6 +60,7 @@ public class StreamQuickSideMenu {
         handleButton.setOnClickListener(v -> toggleExpanded());
         keyboardButton.setOnClickListener(v -> listener.onToggleKeyboard());
         mouseButton.setOnClickListener(v -> listener.onToggleMouse());
+        zoomButton.setOnClickListener(v -> listener.onToggleZoomMode());
 
         setExpanded(false);
     }
@@ -93,11 +97,12 @@ public class StreamQuickSideMenu {
         mouseButton.setVisibility(available ? View.VISIBLE : View.GONE);
     }
 
-    public void syncToggleState(boolean keyboardVisible, boolean mouseVisible) {
+    public void syncToggleState(boolean keyboardVisible, boolean mouseVisible, boolean zoomEnabled) {
         keyboardButton.setSelected(keyboardVisible);
         if (mouseToggleAvailable) {
             mouseButton.setSelected(mouseVisible);
         }
+        zoomButton.setSelected(zoomEnabled);
     }
 
     public void show() {
