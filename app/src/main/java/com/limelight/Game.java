@@ -554,7 +554,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                                 (virtualController.getControllerMode() == VirtualController.ControllerMode.MoveButtons ||
                                  virtualController.getControllerMode() == VirtualController.ControllerMode.ResizeButtons);
                     }
-                });
+                },
+                visible -> syncQuickSideMenuState());
 
         InputManager inputManager = (InputManager) getSystemService(Context.INPUT_SERVICE);
         inputManager.registerInputDeviceListener(keyboardTranslator, null);

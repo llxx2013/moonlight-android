@@ -11,5 +11,7 @@
     <dimen name="stream_key_margin">2dp</dimen>
     <dimen name="stream_keyboard_rail_width_min">140dp</dimen>
     <dimen name="stream_keyboard_rail_width_max">200dp</dimen>
+    <!-- Right rail inset in landscape: 44dp button + 8dp menu padding + 8dp parent marginEnd -->
+    <dimen name="stream_quick_side_menu_clearance_end">60dp</dimen>
 
 </resources>

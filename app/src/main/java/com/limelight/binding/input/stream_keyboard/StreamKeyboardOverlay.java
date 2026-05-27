@@ -33,6 +33,10 @@ public class StreamKeyboardOverlay {
         boolean shouldBlockToggle();
     }
 
+    public interface VisibilityListener {
+        void onVisibilityChanged(boolean visible);
+    }
+
     private enum LayoutMode {
         SPLIT_SIDE,
         BOTTOM
@@ -43,6 +47,7 @@ public class StreamKeyboardOverlay {
     private final StreamKeyboardInput keyboardInput;
     private final GrabInputCallback grabInputCallback;
     private final VisibilityBlocker visibilityBlocker;
+    private final VisibilityListener visibilityListener;
 
     private View rootView;
     private FrameLayout.LayoutParams rootLayoutParams;
@@ -54,12 +59,14 @@ public class StreamKeyboardOverlay {
 
     @SuppressLint("ClickableViewAccessibility")
     public StreamKeyboardOverlay(FrameLayout parent, StreamKeyboardInput keyboardInput, Context context,
-                                   GrabInputCallback grabInputCallback, VisibilityBlocker visibilityBlocker) {
+                                   GrabInputCallback grabInputCallback, VisibilityBlocker visibilityBlocker,
+                                   VisibilityListener visibilityListener) {
         this.parent = parent;
         this.context = context;
         this.keyboardInput = keyboardInput;
         this.grabInputCallback = grabInputCallback;
         this.visibilityBlocker = visibilityBlocker;
+        this.visibilityListener = visibilityListener;
 
         layoutMode = resolveLayoutMode();
         inflateAndBuild();
@@ -152,8 +159,11 @@ public class StreamKeyboardOverlay {
         leftLp.width = railWidth;
         leftRail.setLayoutParams(leftLp);
 
-        ViewGroup.LayoutParams rightLp = rightRail.getLayoutParams();
+        int clearance = context.getResources().getDimensionPixelSize(
+                R.dimen.stream_quick_side_menu_clearance_end);
+        FrameLayout.LayoutParams rightLp = (FrameLayout.LayoutParams) rightRail.getLayoutParams();
         rightLp.width = railWidth;
+        rightLp.setMarginEnd(clearance);
         rightRail.setLayoutParams(rightLp);
     }
 
@@ -367,6 +377,7 @@ public class StreamKeyboardOverlay {
         rootView.requestLayout();
         updateStickyModifierButtons();
         updateShiftedLabels();
+        notifyVisibilityListener();
     }
 
     public void hide() {
@@ -374,6 +385,13 @@ public class StreamKeyboardOverlay {
             rootView.setVisibility(View.GONE);
         }
         visible = false;
+        notifyVisibilityListener();
+    }
+
+    private void notifyVisibilityListener() {
+        if (visibilityListener != null) {
+            visibilityListener.onVisibilityChanged(visible);
+        }
     }
 
     public void destroy() {
