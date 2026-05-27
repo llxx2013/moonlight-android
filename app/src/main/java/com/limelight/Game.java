@@ -33,6 +33,7 @@ import com.limelight.nvstream.jni.MoonBridge;
 import com.limelight.preferences.GlPreferences;
 import com.limelight.preferences.PreferenceConfiguration;
 import com.limelight.ui.GameGestures;
+import com.limelight.ui.StreamQuickSideMenu;
 import com.limelight.ui.StreamView;
 import com.limelight.utils.Dialog;
 import com.limelight.utils.ServerHelper;
@@ -99,8 +100,6 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     // Only 2 touches are supported
     private final TouchContext[] touchContextMap = new TouchContext[2];
     private long threeFingerDownTime = 0;
-    private long fourFingerDownTime = 0;
-    private boolean fourFingerGestureActive = false;
 
     private static final int REFERENCE_HORIZ_RES = 1280;
     private static final int REFERENCE_VERT_RES = 720;
@@ -119,6 +118,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private StreamKeyboardOverlay streamKeyboardOverlay;
     private VirtualController virtualController;
     private VirtualMouse virtualMouse;
+    private StreamQuickSideMenu streamQuickSideMenu;
 
     private PreferenceConfiguration prefConfig;
     private SharedPreferences tombstonePrefs;
@@ -549,6 +549,25 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             virtualMouse.show();
         }
 
+        streamQuickSideMenu = new StreamQuickSideMenu(
+                (FrameLayout) streamView.getParent(),
+                this,
+                new StreamQuickSideMenu.Listener() {
+                    @Override
+                    public void onToggleKeyboard() {
+                        toggleKeyboard();
+                        syncQuickSideMenuState();
+                    }
+
+                    @Override
+                    public void onToggleMouse() {
+                        toggleVirtualMouse();
+                        syncQuickSideMenuState();
+                    }
+                });
+        streamQuickSideMenu.setMouseToggleAvailable(virtualMouse != null);
+        syncQuickSideMenuState();
+
         if (prefConfig.usbDriver) {
             // Start the USB driver
             bindService(new Intent(this, UsbDriverService.class),
@@ -630,6 +649,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             streamKeyboardOverlay.refreshLayoutMode();
         }
 
+        syncQuickSideMenuState();
+
         // Hide on-screen overlays in PiP mode
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (isInPictureInPictureMode()) {
@@ -641,6 +662,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
                 if (virtualMouse != null) {
                     virtualMouse.hide();
+                }
+
+                if (streamQuickSideMenu != null) {
+                    streamQuickSideMenu.hide();
                 }
 
                 performanceOverlayView.setVisibility(View.GONE);
@@ -664,6 +689,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 if (virtualMouse != null) {
                     virtualMouse.show();
                 }
+
+                if (streamQuickSideMenu != null) {
+                    streamQuickSideMenu.show();
+                }
+
+                syncQuickSideMenuState();
 
                 if (prefConfig.enablePerfOverlay) {
                     performanceOverlayView.setVisibility(View.VISIBLE);
@@ -1085,6 +1116,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
         if (controllerHandler != null) {
             controllerHandler.destroy();
+        }
+        if (streamQuickSideMenu != null) {
+            streamQuickSideMenu.destroy();
+            streamQuickSideMenu = null;
         }
         if (streamKeyboardOverlay != null) {
             streamKeyboardOverlay.destroy();
@@ -1546,8 +1581,26 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     public void toggleKeyboard() {
         LimeLog.info("Toggling stream keyboard overlay");
         if (streamKeyboardOverlay != null) {
+            boolean wasVisible = streamKeyboardOverlay.isVisible();
             streamKeyboardOverlay.toggleVisibility();
+            if (wasVisible != streamKeyboardOverlay.isVisible()) {
+                Toast.makeText(this,
+                        streamKeyboardOverlay.isVisible()
+                                ? R.string.toast_stream_keyboard_shown
+                                : R.string.toast_stream_keyboard_hidden,
+                        Toast.LENGTH_SHORT).show();
+            }
         }
+    }
+
+    private void syncQuickSideMenuState() {
+        if (streamQuickSideMenu == null) {
+            return;
+        }
+        streamQuickSideMenu.setMouseToggleAvailable(virtualMouse != null);
+        streamQuickSideMenu.syncToggleState(
+                streamKeyboardOverlay != null && streamKeyboardOverlay.isVisible(),
+                virtualMouse != null && virtualMouse.isVisible());
     }
 
     private void toggleVirtualMouse() {
@@ -2074,21 +2127,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 int eventX = (int)(event.getX(actionIndex) + xOffset);
                 int eventY = (int)(event.getY(actionIndex) + yOffset);
 
-                // Special handling for 4 finger gesture (toggle virtual mouse)
-                if (prefConfig.showVirtualMouse &&
-                        event.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN &&
-                        event.getPointerCount() == 4) {
-                    fourFingerDownTime = event.getEventTime();
-                    fourFingerGestureActive = true;
-
-                    for (TouchContext aTouchContext : touchContextMap) {
-                        aTouchContext.cancelTouch();
-                    }
-
-                    return true;
-                }
-
-                // Special handling for 3 finger gesture
+                // Special handling for 3 finger gesture (toggle quick side menu)
                 if (event.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN &&
                         event.getPointerCount() == 3) {
                     // Three fingers down
@@ -2104,8 +2143,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 }
 
                 // TODO: Re-enable native touch when have a better solution for handling
-                // cancelled touches from Android gestures and 3 finger taps to activate
-                // the software keyboard.
+                // cancelled touches from Android gestures and 3 finger taps to toggle
+                // the quick side menu.
                 /*if (!prefConfig.touchscreenTrackpad && trySendTouchEvent(view, event)) {
                     // If this host supports touch events and absolute touch is enabled,
                     // send it directly as a touch event.
@@ -2131,15 +2170,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                     if (event.getPointerCount() == 1 &&
                             (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || (event.getFlags() & MotionEvent.FLAG_CANCELED) == 0)) {
                         // All fingers up
-                        if (fourFingerGestureActive &&
-                                event.getEventTime() - fourFingerDownTime < THREE_FINGER_TAP_THRESHOLD) {
-                            toggleVirtualMouse();
-                            fourFingerGestureActive = false;
-                            return true;
-                        }
                         if (event.getEventTime() - threeFingerDownTime < THREE_FINGER_TAP_THRESHOLD) {
-                            // This is a 3 finger tap to bring up the keyboard
-                            toggleKeyboard();
+                            if (streamQuickSideMenu != null) {
+                                streamQuickSideMenu.toggleVisibility();
+                            }
                             return true;
                         }
                     }

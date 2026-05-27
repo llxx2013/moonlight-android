@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/quick_side_menu_root"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@drawable/stream_quick_side_menu_bg"
+    android:clickable="true"
+    android:focusable="false"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:padding="4dp">
+
+    <ImageButton
+        android:id="@+id/quick_side_menu_handle"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:background="@drawable/stream_quick_side_menu_button"
+        android:contentDescription="@string/quick_side_menu_expand"
+        android:padding="10dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_quick_menu_handle" />
+
+    <LinearLayout
+        android:id="@+id/quick_side_menu_actions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <ImageButton
+            android:id="@+id/quick_side_menu_keyboard"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginTop="4dp"
+            android:background="@drawable/stream_quick_side_menu_button"
+            android:contentDescription="@string/quick_side_menu_toggle_keyboard"
+            android:padding="10dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_quick_menu_keyboard" />
+
+        <ImageButton
+            android:id="@+id/quick_side_menu_mouse"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginTop="4dp"
+            android:background="@drawable/stream_quick_side_menu_button"
+            android:contentDescription="@string/quick_side_menu_toggle_mouse"
+            android:padding="10dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_quick_menu_mouse"
+            android:visibility="gone" />
+    </LinearLayout>
+</LinearLayout>

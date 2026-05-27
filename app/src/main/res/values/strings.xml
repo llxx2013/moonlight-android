@@ -206,9 +206,15 @@
     <string name="title_checkbox_show_onscreen_controls">Show on-screen controls</string>
     <string name="summary_checkbox_show_onscreen_controls">Show virtual controller overlay on touchscreen</string>
     <string name="title_checkbox_show_virtual_mouse">Show virtual mouse</string>
-    <string name="summary_checkbox_show_virtual_mouse">Show on-screen scroll wheel and mouse buttons while streaming. Use a four-finger tap to toggle visibility.</string>
+    <string name="summary_checkbox_show_virtual_mouse">Show on-screen scroll wheel and mouse buttons while streaming. Toggle visibility from the in-stream quick side menu.</string>
     <string name="toast_virtual_mouse_shown">Virtual mouse shown</string>
     <string name="toast_virtual_mouse_hidden">Virtual mouse hidden</string>
+    <string name="quick_side_menu_expand">Expand quick menu</string>
+    <string name="quick_side_menu_collapse">Collapse quick menu</string>
+    <string name="quick_side_menu_toggle_keyboard">Toggle virtual keyboard</string>
+    <string name="quick_side_menu_toggle_mouse">Toggle virtual mouse</string>
+    <string name="toast_stream_keyboard_shown">Virtual keyboard shown</string>
+    <string name="toast_stream_keyboard_hidden">Virtual keyboard hidden</string>
     <string name="title_checkbox_vibrate_osc">Enable vibration</string>
     <string name="summary_checkbox_vibrate_osc">Vibrates your device to emulate rumble for the on-screen controls</string>
     <string name="title_only_l3r3">Only show L3 and R3</string>
